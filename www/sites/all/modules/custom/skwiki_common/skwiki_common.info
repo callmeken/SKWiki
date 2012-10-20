@@ -1,0 +1,4 @@
+name = SKWiki Common
+description = General custom functionality for the Semantic Kurfess Wiki.
+core = 7.x
+package = SKWiki (Semantic Kurfess Wiki)

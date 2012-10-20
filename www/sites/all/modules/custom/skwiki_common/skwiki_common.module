@@ -1,0 +1,9 @@
+<?php
+
+/**
+ * @file
+ * General custom functionality for the Semantic Kurfess Wiki.
+ */
+
+function skwiki_common_init() {
+}

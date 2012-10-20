@@ -30,7 +30,7 @@
   ; least one more for our custom CSS.
 
   stylesheets[all][] = color/colors.css
-  stylesheets[all][] = css/skwiki_at.less
+  stylesheets[all][] = css/skwiki.less
 
   ; Internet Explorer Stylesheets
   ;
@@ -47,7 +47,7 @@
 
   ; If you need to add JavaScript or other scripts you can add them here. Normal
   ; syntax is scripts[] = path/to/file, e.g.
-  scripts[] = js/skwiki_at.js
+  scripts[] = js/skwiki.js
 
   ; Internet Explorer Scripts
   ;

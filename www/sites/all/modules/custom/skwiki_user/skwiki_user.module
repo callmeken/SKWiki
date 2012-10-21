@@ -1,0 +1,60 @@
+<?php
+
+/**
+ * @file
+ * Custom user functionality for the Semantic Kurfess Wiki.
+ */
+ 
+define('USER_SUFFIX', '@calpoly.edu');
+define('USER_EMAIL_ON_CREATE', TRUE);
+
+function skwiki_user_node_presave($node) {
+  if (isset($node->field_user_handle[LANGUAGE_NONE][0]['value'])) {
+    $handle = trim($node->field_user_handle[LANGUAGE_NONE][0]['value']);
+    $account = skwiki_user_from_handle($handle);
+    $node->field_user_reference[LANGUAGE_NONE][0]['target_id'] = $account->uid;
+  }
+}
+
+function skwiki_user_node_insert($node) {
+  global $user;
+  
+  // When a node is inserted by an anonymous user, and that node has a user reference field,
+  // log them in automatically
+  if (!$user->uid && isset($node->field_user_reference[LANGUAGE_NONE][0]['target_id'])) {
+    $account = user_load($node->field_user_reference[LANGUAGE_NONE][0]['target_id']);
+    $form_state = array();
+    $form_state['uid'] = $account->uid;
+    user_login_submit(array(), $form_state);
+  }
+}
+
+/**
+ * Given a handle, return the corresponding drupal user account or 
+ */
+function skwiki_user_from_handle($handle) {
+  $account = user_load_by_name($handle);
+  if (!$account->uid) {
+    // Create a new user for this handle
+    $pass = user_password();
+    $account_info = array(
+      'name' => $handle,
+      'mail' => $handle . USER_SUFFIX,
+      'pass' => $pass,
+      'status' => 1,
+      'init' => $handle . USER_SUFFIX,
+      'roles' => array(
+        DRUPAL_AUTHENTICATED_RID => 'authenticated user',
+      )
+    );
+    $account = user_save('', $account_info);
+    
+    // Send email?
+    if (USER_EMAIL_ON_CREATE) {
+      $account->password = $pass;
+      //drupal_mail('user', 'register_no_approval_required', $email, NULL, array('account' => $account), variable_get('site_mail', 'noreply@example..com'));
+    }
+  }
+
+  return $account;
+}

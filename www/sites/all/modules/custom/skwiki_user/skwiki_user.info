@@ -1,0 +1,4 @@
+name = SKWiki User
+description = Custom user functionality for the Semantic Kurfess Wiki.
+core = 7.x
+package = SKWiki (Semantic Kurfess Wiki)

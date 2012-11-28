@@ -7,3 +7,80 @@
 
 function skwiki_common_init() {
 }
+
+function skwiki_common_node_view($node, $build_mode = 'full') {
+  $string = $node->body['und'][0]['value'];
+
+  skwiki_common_top_words($string);
+}
+
+/**
+ * Returns an array of the words considered for tags
+ */
+function skwiki_common_top_words($body = null) {
+  if (!isset($body)) {
+    return null; 
+  }
+  $words = preg_split('#[\\s\",.!?;:\-()]#', $body, -1, PREG_SPLIT_NO_EMPTY);
+  // dpm($words);
+  $words_arr = array();
+  //Add the words and their frequencies into a single array
+  foreach($words as $word) {
+    // Need to verify that the word is actually a word and we need to make all the characters lower case
+    $word = strtolower($word);
+    if (!isset($words_arr[$word])) {
+      $words_arr[$word] = 0;
+    }
+    $words_arr[$word]++;
+  }
+  arsort($words_arr);
+  
+  $stop_words = taxonomy_vocabulary_machine_name_load('stop_words');
+  $vid = $stop_words->vid;
+  $terms = taxonomy_get_tree($vid);
+  $terms = skwiki_common_get_taxonomy_array($terms);
+  $top_freq = 0;
+  $top_words = array();
+  //Prune the words array for stop words found
+  foreach ($words_arr as $word => $freq) {
+    if (in_array($word, $terms)) {
+      // dpm($word . ' found');
+      unset($words_arr[$word]);
+    }
+    else {
+      if ($top_freq == 0) {
+        $top_freq = $freq;
+        $min_freq = $top_freq * 0.4; // 0.4 is a value that may change depending on how terms we want to consider
+        $top_words[] = $word;
+      }
+      else {
+        if ($freq >= $min_freq) { //If the word passes the min occurence add it to the array
+          $top_words[] = $word;
+        }
+        if (count($top_words) == 8) { //We'll probably need to adjust the number of words we accept
+          break;
+        }
+      }
+    }
+  }
+  dpm($top_words, 'top words');
+  dpm($words_arr);
+    
+}
+/**
+ * Returns the taxonomy items as an array
+ * for easy checking of content existence
+ */
+function skwiki_common_get_taxonomy_array($terms = null) {
+  if ($terms == null) {
+    return null;
+  }
+  else {
+    $arr = array();
+    foreach ($terms as $term) {
+      $arr[] = $term->name; 
+    }
+    
+    return $arr;
+  }
+}

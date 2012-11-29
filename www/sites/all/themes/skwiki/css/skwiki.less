@@ -1,2 +1,80 @@
 @import url('lib.less');
 
+body {
+  .clear {
+    .clearfix();
+  }
+  
+  .hide {
+    display: none;
+  }
+  
+  #page {
+    .region-top-menu {
+      .border-radius(6px);
+      
+      ul {
+        li {
+          border-right: 1px solid #CCC;
+          padding-left: 5px;
+          padding-right: 5px;
+        }
+      }
+    }
+    
+    #header {
+      padding: 20px 0;
+      position: relative;
+      
+      #branding {
+        margin: 0;
+        width: 100%;
+      
+        #name-and-slogan {
+          float: left;
+          margin-top: 10px;
+          
+          #site-slogan {
+            font-size: 1.3em;
+          }
+        }
+      }
+      
+      #menu-bar {
+        background: #FFF;
+        .border-radius(6px);
+        padding: 10px 30px;
+        position: absolute;
+        right: 0;
+        bottom: 20px;
+        
+        ul {
+          li {
+            float: none;
+            
+            a {
+              background: none;
+              display: inline;
+            }
+          }
+        }
+      }
+    }
+    
+    #columns {
+      div#tasks {
+        margin: 0 0 20px 0;
+        
+        ul.tabs {
+          margin: 0;
+        }
+      }
+    }
+  }
+  
+  .view-nuggets {
+    .view-header h1 {
+      display: none;
+    }
+  }
+}

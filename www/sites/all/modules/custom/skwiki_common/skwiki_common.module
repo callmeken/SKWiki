@@ -5,5 +5,154 @@
  * General custom functionality for the Semantic Kurfess Wiki.
  */
 
-function skwiki_common_init() {
+/**
+ * Implementation of hook_block_info().
+ */
+function skwiki_common_block_info() {
+  $blocks['course_menu'] = array(
+    'info' => t('Course Menu'), 
+    'cache' => DRUPAL_NO_CACHE,
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implementation of hook_block_view().
+ */
+function skwiki_common_block_view($delta = '') {
+  $block = array();
+
+  switch ($delta) {
+    case 'course_menu':
+      $block['subject'] = '';
+      $block['content'] = _skwiki_common_course_menu_block();
+      break;
+  }
+  
+  return $block;
+}
+
+/**
+ * Internal block function to return rendered HTML of a menu when visiting pages that are course-specific
+ */
+function _skwiki_common_course_menu_block() {
+  $output = '';
+
+  $group = og_context();
+  if (isset($group->gid)) {
+    $class_node = node_load($group->etid);
+    if ($class_node->type == 'class') {
+      $output .= '<h4>' . $class_node->title . '</h4>';
+      
+      // Begin array of links
+      $items = array();
+      
+      // Add class news link
+      $items[] = l(t('Class News'), 'news/' . $group->gid);
+      
+      // Add syllabus link
+      $syllabus_node = skwiki_common_get_class_info('syllabus', $group->gid);
+      if ($syllabus_node) {
+        $items[] = l(t('Syllabus'), 'node/' . $syllabus_node->nid);
+      }
+      
+      // Add schedule link
+      $schedule_node = skwiki_common_get_class_info('schedule', $group->gid);    
+      if ($schedule_node) {
+        $items[] = l(t('Schedule'), 'node/' . $schedule_node->nid);
+      }
+      
+      // Add labs/assignments link
+      $items[] = l(t('Labs & Assignments'), 'assignments/' . $group->gid);
+     
+      // Add AI nuggets link
+      $items[] = l(t('AI Nuggets'), 'nuggets/' . $group->gid);
+      
+      // Add teams link
+      $items[] = l(t('Project'), 'teams', array('query' => array('gids_node[]' => $class_node->nid)));
+      
+      $output .= theme('item_list', array('items' => $items));
+    }
+  }
+  
+  return $output;
+}
+
+/**
+ * Return a common info page of the given type for the supplied group id
+ */
+function skwiki_common_get_class_info($node_type, $class_gid) {
+  $class_info = &drupal_static(__FUNCTION__);
+  
+  if (!isset($class_info[$class_gid])) {
+    $class_info[$class_gid] = array();
+  }
+  
+  if (!isset($class_info[$class_gid][$node_type])) {
+    $class_info[$class_gid][$node_type] = NULL;
+    $query = db_select('og_membership', 'o');
+    $query->join('node', 'n', 'n.nid = o.etid');
+    $query->fields('o', array('etid'))
+          ->condition('o.entity_type', 'node')
+          ->condition('n.type', $node_type)
+          ->condition('o.gid', $class_gid);
+    $nid = $query->execute()->fetchField();
+    
+    if ($nid) {
+      $class_info[$class_gid][$node_type] = node_load($nid);
+    }
+  }
+  
+  return $class_info[$class_gid][$node_type];
+}
+
+/**
+ * Implementation of hook_preprocess_views_view_field().
+ */
+function skwiki_common_preprocess_views_view_field(&$vars) {
+  if ($vars['view']->name == 'og_list' &&
+    (($vars['view']->current_display == 'page_2') || ($vars['view']->current_display == 'attachment_1'))) {
+    // "Current Courses" or "Past Courses" view. @see /teaching
+    if ($vars['field']->options['id'] == 'nothing' || $vars['field']->options['id'] == 'nothing_1') {
+      // Either the "syllabus" or "schedule" field.
+      $node_type = ($vars['field']->options['id'] == 'nothing') ? 'syllabus' : 'schedule';
+      
+      // Grab the syllabus or schedule NID for this particular class, if it exists
+      $group = og_get_group('node', $vars['row']->nid);
+      if (isset($group->gid)) {
+        $node = skwiki_common_get_class_info($node_type, $group->gid);
+        if ($node) {
+          $vars['output'] = l($vars['output'], 'node/' . $node->nid);
+        }
+        else {
+          $vars['output'] = 'N/A';
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implementation of hook_og_context_negotiation_info().
+ */
+function skwiki_common_og_context_negotiation_info() {
+  $providers = array();
+
+  $providers['group-content-list'] = array(
+    'name' => t('Group Content List'),
+    'description' => t("Determine context by checking the current URL against known lists of group content (i.e. news, assignments)"),
+    'callback' => 'skwiki_common_og_context_handler_group_content_list',
+    'menu path' => array('news/%', 'assignments/%', 'nuggets/%'),
+  );
+
+  return $providers;
+}
+
+/**
+ * Context handler; Get groups from existing node or ctools context.
+ */
+function skwiki_common_og_context_handler_group_content_list() {
+  $menu_item = menu_get_item();
+  return array($menu_item['page_arguments'][2]);
 }

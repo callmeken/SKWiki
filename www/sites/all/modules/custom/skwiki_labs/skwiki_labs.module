@@ -1,0 +1,146 @@
+<?php
+
+/**
+ * @file
+ * Custom labs/assignments functionality for the Semantic Kurfess Wiki.
+ */
+ 
+/**
+ * Implementation of hook_form_alter().
+ */
+function skwiki_labs_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == 'lab_submissions_node_form') {
+    if (isset($_GET['lab'])) {
+      $lab_node = node_load($_GET['lab']);
+    }
+    else if (isset($form['#node']->nid)) {
+      $lab_node = node_load($form['#node']->field_lab_reference[LANGUAGE_NONE][0]['target_id']);
+    }
+    if ($lab_node->type == 'labs') {
+      $action = ($form['#node']->nid) ? ('Edit') : ('Submit');
+      drupal_set_title(t($action) . ' ' . $lab_node->title);
+      $form['field_lab_reference'][LANGUAGE_NONE]['#default_value'] = $lab_node->nid;
+    }
+    
+    $form['field_lab_reference']['#prefix'] = '<div class="hide">';
+    $form['field_lab_reference']['#suffix'] = '</div>';
+  }
+}
+
+/**
+ * Implementation of hook_node_view().
+ */
+function skwiki_labs_node_view($node, $view_mode, $langcode) {
+  global $user;
+  
+  if ($node->type == 'labs' && $view_mode == 'full') {
+    $destination = $_GET['q'];
+    
+    if ($user->uid > 0) {
+      // Check if we are within the submission window
+      $submission_window = FALSE;
+      $start = $node->field_lab_submission_window[LANGUAGE_NONE][0]['value'];
+      $end = $node->field_lab_submission_window[LANGUAGE_NONE][0]['value2'];
+      $now = time();
+      if ($start < $now && $end > $now) {
+        $submission_window = TRUE;
+      }
+      
+      // Check for a lab submission
+      $markup = '<a name="submission"></a>';
+      $lab_submission_node = skwiki_labs_get_submission($node->nid);
+      if ($lab_submission_node) {
+        $markup .= '
+        <div style="border: 1px solid black; margin: 15px 0; padding: 10px;">
+          <h3>'
+            . t('Your Submission')
+            . ' [' . l(t('Edit'), 'node/' . $lab_submission_node->nid . '/edit', array('query' => array('destination' => $destination))) . ']
+          </h3>'
+          . render(node_view($lab_submission_node)) . '
+        </div>';
+      }
+      else {
+        // See if we are in the date range for this lab submission
+        if ($submission_window) {
+          // We are within the submission window; provide link to post submission
+          $markup .= l(t('Click here to submit this assignment'), 'node/add/lab-submissions', array('query' => array('lab' => $node->nid, 'destination' => $destination)));
+        }
+      }
+      
+      // If this lab has opted to show other content display it here
+      if ($node->field_lab_show_submissions[LANGUAGE_NONE][0]['value'] > 0) {
+        if (($node->field_lab_show_submissions[LANGUAGE_NONE][0]['value'] == 1 && $end < $now)
+         || ($node->field_lab_show_submissions[LANGUAGE_NONE][0]['value'] == 2)) {
+          // Now is an appropriate time to display all other lab submissions
+          $view = views_get_view('lab_submissions');
+          $arguments = array($node->nid);
+          if ($lab_submission_node) {
+            $arguments[] = $lab_submission_node->nid;
+          }
+          $view->set_arguments($arguments);
+          $markup .= '<div style="border: 1px solid black; margin: 15px 0; padding: 10px;"><h3>' . t('Other Submissions') . '</h3>' . $view->preview() . '</div>';
+        }
+      }
+    }
+    else {
+      $markup = t('You must be logged in to submit this assignment.') . ' ' . l(t('Click here to log in.'), 'user/login', array('query' => array('destination' => $destination)));
+    }
+    
+    $node->content['skwiki_labs_submit'] = array(
+      '#markup' => $markup, 
+      '#weight' => 10,
+    );
+  }
+}
+
+/**
+ * Return the lab submission node for the given user and lab assignment.
+ * If no uid is supplied, the current user is assumed.
+ */
+function skwiki_labs_get_submission($lab_nid, $uid = NULL) {
+  global $user;
+  if (!$uid) {
+    $uid = $user->uid;
+  }
+  
+  $nid = db_select('field_data_field_lab_reference', 'lr')
+    ->fields('lr', array('entity_id'))
+    ->condition('lr.bundle', 'lab_submissions')
+    ->condition('lr.field_lab_reference_target_id', $lab_nid)
+    ->execute()
+    ->fetchField();
+  if ($nid) {
+    return node_load($nid);
+  }
+  
+  return NULL;
+}
+
+/**
+ * Implementation of hook_preprocess_views_view_field().
+ */
+function skwiki_labs_preprocess_views_view_field(&$vars) {
+  global $user;
+  
+  if ($vars['view']->name == 'assignments') {
+    // "Labs and Assignments" view
+    if ($vars['field']->options['id'] == 'nothing') {
+      // "Submitted?" field
+      if ($user->uid > 0) {
+        // User is logged in
+        $lab_nid = $vars['row']->nid;
+        $lab_submission = skwiki_labs_get_submission($lab_nid);
+        if ($lab_submission) {
+          $vars['output'] = l(t('Yes'), 'node/' . $lab_nid, array('fragment' => 'submission'));
+        }
+        else {
+          $vars['output'] = l(t('No'), 'node/' . $lab_nid, array('fragment' => 'submission'));
+        }
+      }
+      else {
+        // User is not logged in
+        $vars['output'] = l(t('Login'), 'user/login', array('query' => array('destination' => $_GET['q'])));
+      }
+    }
+  }
+}

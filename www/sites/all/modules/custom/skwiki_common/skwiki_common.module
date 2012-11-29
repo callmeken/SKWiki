@@ -268,7 +268,7 @@ function skwiki_tags_form_submit($form, &$form_state) {
 
 function skwiki_common_form_alter(&$form, &$form_state, $form_id) {
   if (strstr($form_id, 'node_form')) {
-    $form['actions']['submit']['#submit'][] = 'skwiki_common_check_tags';
+    //$form['actions']['submit']['#submit'][] = 'skwiki_common_check_tags';
   }
 }
 

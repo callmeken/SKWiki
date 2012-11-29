@@ -8,10 +8,127 @@
 function skwiki_common_init() {
 }
 
-function skwiki_common_node_view($node, $build_mode = 'full') {
-  $string = $node->body['und'][0]['value'];
+function skwiki_common_menu() {
+  $items['add_tags/%node'] = array(
+    'title' => 'New Tags found',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('skwiki_tags_form', 1),
+    'access arguments' => array('access content'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  
+  return $items;
+}
 
-  skwiki_common_top_words($string);
+function skwiki_tags_form($form, &$form_state, $node) {
+  //Need to check for node type before this
+  $string = $node->body['und'][0]['value'];
+  
+  $words = skwiki_common_top_words($string);
+  $default_values = array();
+  if (isset($node->field_tag_references['und'])) {
+    $taxonomy_found = $node->field_tag_references['und'];
+    
+    foreach ($taxonomy_found as $taxonomy) {
+      $term = taxonomy_term_load($taxonomy['tid']);
+      if (!in_array($term->name, $words)) {
+        $words[] = $term->name;
+      }
+      $default_values[] = array_search($term->name, $words);
+    }
+  }
+  $form = array();
+  $form['tags']['tags_found'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Choose which tags you want to associate with this content:'),
+    '#options' => $words,
+    '#default_value' => $default_values,
+  );
+  $form['tags']['tags_entered'] = array(
+    '#title' => t('Not enough tags? Feel free to add more.'),
+    '#type' => 'textarea',
+    '#description' => t('Please separate tags by commas.'),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Add Tags'),
+  );
+  return $form;
+}
+
+function skwiki_tags_form_submit($form, &$form_state) {
+  $nid = arg(1);
+  $node = node_load($nid);
+  
+  unset($node->field_tag_references['und']);
+  if (!isset($node->field_tag_references['und'])) {
+    $node->field_tag_references['und'] = array();
+  }
+  
+  $tags_entered = $form_state['input']['tags_entered'];
+  $tags_selected = $form_state['input']['tags_found'];
+  $tag_options = $form_state['complete form']['tags']['tags_found']['#options'];
+
+  $tag_list = taxonomy_vocabulary_machine_name_load('tag_list');
+  $vid = $tag_list->vid;
+  $terms = taxonomy_get_tree($vid);
+  $terms = skwiki_common_get_taxonomy_array($terms);
+  
+  foreach ($tag_options as $key => $option) { // Do this again for the typed in terms
+    if ($tags_selected[$key] != null) {
+      if ($terms != null && in_array($option, $terms)) {
+        $taxonomy = taxonomy_get_term_by_name($option, 'tag_list');
+        $term = array_shift($taxonomy);
+      }
+      else {
+        //Add to taxonomy
+        $term = new stdClass();
+        $term->name = $option;
+        $term->vid = $vid;
+        taxonomy_term_save($term);
+      }
+
+      $node->field_tag_references['und'][] = array('tid' => $term->tid);
+    }
+  }
+
+  if ($tags_entered) { //If the user added more tags in the text field, associate these with the node
+    // Maybe validate these words in case they are stop words?
+    $words = preg_split('#[\\s\",.!?;:\-()]#', $tags_entered, -1, PREG_SPLIT_NO_EMPTY);
+    foreach ($words as $word) {
+      if ($terms != null && in_array($word, $terms)) {
+        $taxonomy = taxonomy_get_term_by_name($word, 'tag_list');
+        $term = array_shift($taxonomy);
+      }
+      else {
+        //Add to taxonomy
+        $term = new stdClass();
+        $term->name = $word;
+        $term->vid = $vid;
+        taxonomy_term_save($term);
+      }
+
+      $node->field_tag_references['und'][] = array('tid' => $term->tid);
+    }
+  }
+  
+  node_save($node);
+  $form_state['redirect'] = 'node/' . $nid;  
+}
+
+function skwiki_common_form_alter(&$form, &$form_state, $form_id) {
+  if (strstr($form_id, 'node_form')) {
+    $form['actions']['submit']['#submit'][] = 'skwiki_common_check_tags';
+  }
+}
+
+function skwiki_common_check_tags($form, &$form_state) {
+  $form_state['redirect'] = 'add_tags/' . $form_state['nid'];
+}
+
+function skwiki_common_node_view($node, $build_mode = 'full') {
+
 }
 
 /**
@@ -41,10 +158,10 @@ function skwiki_common_top_words($body = null) {
   $terms = skwiki_common_get_taxonomy_array($terms);
   $top_freq = 0;
   $top_words = array();
+  
   //Prune the words array for stop words found
   foreach ($words_arr as $word => $freq) {
     if (in_array($word, $terms)) {
-      // dpm($word . ' found');
       unset($words_arr[$word]);
     }
     else {
@@ -54,7 +171,7 @@ function skwiki_common_top_words($body = null) {
         $top_words[] = $word;
       }
       else {
-        if ($freq >= $min_freq) { //If the word passes the min occurence add it to the array
+        if ($freq >= $min_freq) { //If the word passes the min occurrence add it to the array
           $top_words[] = $word;
         }
         if (count($top_words) == 8) { //We'll probably need to adjust the number of words we accept
@@ -63,9 +180,8 @@ function skwiki_common_top_words($body = null) {
       }
     }
   }
-  dpm($top_words, 'top words');
-  dpm($words_arr);
-    
+  
+  return $top_words;  
 }
 /**
  * Returns the taxonomy items as an array
